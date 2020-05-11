@@ -1,0 +1,32 @@
+{
+    "name": "Picto",
+    "short_name": "Picto",
+    "start_url": "/",
+    "theme_color": "#095C79",
+    "background_color": "#095C79",
+    "display": "standalone",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "/static/images/icon-64.png",
+            "type": "image/png",
+            "sizes": "64x64"
+          },
+          {
+            "src": "/static/images/icon-96.png",
+            "type": "image/png",
+            "sizes": "96x96"
+          },
+          {
+            "src": "/static/images/icon-192.png",
+            "type": "image/png",
+            "sizes": "192x192"
+          },
+          {
+            "src": "/static/images/icon-512.png",
+            "type": "image/png",
+            "sizes": "512x512"
+          }
+      ]
+    
+}

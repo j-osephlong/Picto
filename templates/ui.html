@@ -1,0 +1,168 @@
+<html>
+    <head>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/1.7.3/socket.io.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+        <script type="text/javascript" src="{{ url_for('static', filename = 'draw.js') }}?v=2"></script>       
+        <script type="text/javascript" src="{{ url_for('static', filename = 'user.js') }}?v=2"></script>       
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename = 'style2.css') }}?v=2"> 
+    </head>
+    <script>
+        /*
+            all current page, UI dependant code
+            */
+        var scrolling = false;
+        var position = $("#messages").scrollTop();
+
+        document.addEventListener("DOMContentLoaded", function(event){
+            $('#draw-area').css('max-height', window.innerHeight/2)
+            $('#top-area').css('min-height', window.innerHeight/2)
+            $('#toolbar').css('min-height', $('#toolbar').height()+"px")
+            
+            $('#header').css("height", document.getElementById("header").clientHeight+"px")       
+
+            $('#messages').scroll((e) => {scrolling = true})
+
+            $('#clearCanB').click((e)=>{con.clearRect(0, 0, canvas.width, canvas.height)})
+
+
+            // let maxHeight = $(document.body).height()
+            // let minHeight = maxHeight - ($('#toolbar').height() + 50)
+            // target elements with the "draggable" class
+            // interact('#draw-area')
+            // .draggable({
+            //     // enable inertial throwing
+            //     ignoreFrom: '#canvas-container',
+            //     inertia: true,
+            //     // keep the element within the area of it's parent
+            //     modifiers: [
+            //     interact.modifiers.restrictRect({
+            //         // restriction: 'parent',
+            //         endOnly: true
+            //     })
+            //     ],
+            //     // enable autoScroll
+            //     // autoScroll: true,
+
+            //     listeners: {
+            //     // call this function on every dragmove event
+            //     move (e) {
+            //         console.log (e)
+            //         let dy = $(e.target).position().top + e.dy
+            //         if (dy < maxHeight/2) dy = maxHeight/2
+            //         if (dy > minHeight) dy = minHeight
+
+            //         $('#messages').css('bottom', maxHeight - $(e.target).position().top)
+            //         $(e.target).css('top', dy)
+            //     },
+
+            //     // call this function on every dragend event
+            //     end (e) {
+            //         console.log (e)
+                    
+
+            //         if (parseInt($(e.target).css('top')) < maxHeight/2 + $('#draw-area').height()/2)
+            //         {
+            //             //keep max
+            //             console.log('max')
+
+            //             $(e.target).animate({top : (maxHeight/2)}, 100)
+            //         }
+            //         else
+            //         {
+            //             //keep min
+            //             console.log('min - ' + $(e.target).css('top') + " - " +  (maxHeight/2 + $('#draw-area').height()/2))
+            //             $(e.target).animate({top : minHeight}, 100)
+            //         }
+
+            //     }
+            //     }
+            // })
+
+        }, false);
+
+        setInterval(() => {
+            if (scrolling)
+            {
+                var scrollVal = $('#messages').prop('scrollHeight') - ($("#messages").scrollTop()+$("#messages").height());
+                if (scrollVal  > 100 && !minimized)
+                {
+                    console.log("scroll up "  + scrollVal)
+                    
+                    minimizeDrawArea()
+
+                    //up
+                }
+                if ($("#messages").scrollTop() < 100)
+                    fetchMessages(10, message_offset)
+                
+                position = scrollVal;
+            }
+            scrolling = false;
+        }, 300)
+        
+        </script>
+
+    <body>
+        <div id="drawpage_container">
+
+            <div id="top-area">
+
+                <div id="header">
+                    <span class="header-button" style="
+                    float: left;
+                    font-size: 4vh;
+                    background-color: rgba(0, 0, 0, 0);
+                    margin-left: 2%;
+                ">WANDA-LOIS</span>
+                    <button id = 'send_Button' class="header-button">
+                        <span class="material-icons md-48" style="font-size: 4vh;">reply_all</span>
+                    </button>
+                    <button id = 'reset_Button' class="header-button" onclick="forceReload()">
+                        <span class="material-icons md-48" style="font-size: 4vh;">refresh</span>
+                    </button>
+                    
+                </div>
+
+                <div id="bucket-select"></div>
+
+                <div id="messages">
+
+                    <!-- <div class='server-message'></div> -->
+                </div>
+            
+            </div>
+            <div id="draw-area">
+                <!-- <div style="width: 100%; height: 50px; touch-action: none;"></div> -->
+                <div id="toolbar">
+                    <div class="toolbar-button" style="animation-delay:0.07s" id="minMaxB"><span class="bText">Close</span></div>
+                    <div class="toolbar-button" style="animation-delay:0.14s" id="penB"><span class="bText">Pen</span></div>
+                    <div class="toolbar-button" style="animation-delay:0.28s" id="textB"><span class="bText">Text</span></div>
+                    <div class="toolbar-button" style="animation-delay:0.21s" id="clearCanB"><span class="bText">Clear</span></div>
+                    <div class="toolbar-button" style="animation-delay:0.35s" id="copyLastB"><span class="bText">Copy</span></div>
+                    <div class="toolbar-button" style="animation-delay:0.42s"><span class="bText">Button</span></div>
+                </div>
+                <div id="pen-settings">
+                    <span style="font-size: 3vh; color: white;">Pen Size<br></span>
+                    <input type="range" min="5" max="60" value="15" class="slider" id="penSize">
+                    <span style="font-size: 3vh; color: white;" id='penColorText'><br>Pen Color<br></span>
+                    <span style="font-size: 2vh; color: rgb(255, 131, 131);">Red<br></span>
+                    <input type="range" min="0" max="255" value="0" class="slider" id="penRed">
+                    <span style="font-size: 2vh; color: rgb(160, 255, 131);">Green<br></span>
+                    <input type="range" min="0" max="255" value="0" class="slider" id="penGreen">
+                    <span style="font-size: 2vh; color: rgb(131, 181, 255);">Blue<br></span>
+                    <input type="range" min="0" max="255" value="0" class="slider" id="penBlue">
+                    <img src="{{ url_for('static', filename = 'eraser.svg') }}" id="eraser-button">
+                </div>
+                <div id="canvas-container">
+                    <canvas></canvas>
+
+                </div>
+            </div>
+
+        </div>
+    </body>
+</html>
