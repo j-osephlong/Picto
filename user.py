@@ -40,7 +40,7 @@ def createUser():
 #   and the secret  
 def createToken(username):
     return jwt.encode({'userName': username, 'exp' : datetime.datetime.utcnow()+datetime.timedelta(minutes = 30)}
-        , tokenSecret, algorithm='HS256').hex()
+        , tokenSecret, algorithm='HS256')
 
 #Method used for login. Returns a token on success
 @user.route('/user/auth', methods=['POST'])
@@ -67,7 +67,7 @@ def userAuth():
 def tokenAuth(username, token):
     user = None
     try:
-        user = jwt.decode(codecs.decode(token, "hex"), tokenSecret, algorithms=['HS256'])['userName']
+        user = jwt.decode(token, tokenSecret, algorithms=['HS256'])['userName']
     except Exception as E:
         print(str(E))
         return False
