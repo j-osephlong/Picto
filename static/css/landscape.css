@@ -1,0 +1,13 @@
+@media (orientation: landscape) {
+    #messages-container {
+        display: none;
+    }
+    #bottom-overlay {
+        top: 0 !important; 
+        height: 100% !important;
+        border-radius: 0;
+    }
+    #bottom-overlay .tab-line {
+        display: none;
+    }
+}

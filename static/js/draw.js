@@ -3,6 +3,7 @@ let lastPointY = null
 let canvas = null
 let con = null
 let canvasPos = null
+let blank = true
 
 let penColor = 'rgba(0, 0, 0, 255)'
 
@@ -38,7 +39,6 @@ function initalizeCanvas(e)
     canvas.addEventListener('touchend', function(e){
         lastPointX = null
         lastPointY = null
-        console.log("end")
     }, {passive: true}) 
 
     $('#penRed').on('input', penColorChange)
@@ -53,6 +53,7 @@ function draw(e)
 
 function drawxy(x, y)
 {
+    blank = false
     // var grd = con.createLinearGradient(x, y, 1, canvasPos.height);
 
     // grd.addColorStop(0, '#12a6eb');   
@@ -110,13 +111,16 @@ function toggleEraser()
 
 function copyMessage()
 {
+    initalizeCanvas(null)
     let copiedImage = new Image()
-    copiedImage.src = $('#messages-container .message')[$('#messages-container').children().length - 1].children[1].src
+    copiedImage.src = $('#messages-container .message')[$('#messages-container').children().length - 1].children[1].children[0].src
     copiedImage.onload = function(){
         con.drawImage(copiedImage, 0, 0);
+        blank = false
     }
 }
 
 function clearCanvas() {
     con.clearRect(0, 0, canvas.width, canvas.height)
+    blank = true
 }

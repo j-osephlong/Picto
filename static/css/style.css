@@ -10,6 +10,8 @@ html, body {
     height: 100%;
     overflow: hidden;
     margin: 0;
+
+    position: fixed;
     
 }
 
@@ -77,16 +79,34 @@ canvas {
 .bucket-button {
     font-size: 3vh;
     margin: 2%;
+    max-height: 1.3em;
+    transition: all 1s;
     padding: 3.5%;
     background: linear-gradient(354deg, rgb(234, 234, 234) 0%, rgba(9, 92, 121, 0.08) 91%);
     border-radius: 3em;
     text-align: center;
 }
 
+.bucket-button.expanded {
+    border-radius: 2.5vh;
+    max-height: 6em;
+}
+
+.bucket-button .info {
+    max-height: 0;
+    transition: all 1s;
+    overflow: hidden;
+}
+
+.bucket-button.expanded .info {
+    max-height: 5em;
+}
+
 #messages-container {    
     font-size: 3vh;
     width: 100%;
     padding: 3%;
+    padding-bottom: 6%;
     box-sizing: border-box;
     align-items: center;
     height: 90%;
@@ -101,6 +121,7 @@ canvas {
     margin: 5%;
 
     margin-right: auto;
+    overflow: hidden;
 }
 
 .message .name {
@@ -130,6 +151,38 @@ canvas {
     height: fit-content;
 }
 
+.message .caption {
+    max-width: 70vw;
+    width: fit-content;
+    float: right;
+    margin-top: 1vh;
+    font-size: .9em;
+    background-color: #ffffff94;
+    padding: .2em .5em;
+    border-radius: 1.5em;
+    overflow: hidden;
+    height: fit-content;
+}
+
+.chat-notice { 
+    width: 90%;
+    height: fit-content;
+    text-align: center;
+    padding: 2vh;
+    font-weight: bold;
+    margin: 5%;
+    margin-left: auto;
+    margin-right: auto;
+    border-radius: 2.5vh;
+    background-color: #e0fff27a;
+    box-sizing: border-box;
+}
+
+.chat-notice.warning {
+    background: linear-gradient(42deg, rgba(255,57,57,0.9388349089635855) 21%, rgba(255,0,0,0.9780505952380952) 100%) !important;
+    color: white;
+}
+
 .bottom-button {
     width: 100%;
     height: 20%;
@@ -148,7 +201,7 @@ canvas {
     padding: 5%;
 }
 
-#caption-input {
+#caption-container {
     width: 100%;
     height: 20%;
     border-radius: 1em 1em 0 0;
@@ -167,7 +220,7 @@ canvas {
     text-align: center;
 }
 
-#caption-input input[type=text] {  
+#caption-container input[type=text] {  
     height: 33.33%;
     min-height: fit-content;
     background-color: #ffffff00;
@@ -179,11 +232,11 @@ canvas {
     margin-bottom: 66.66%;
 }
 
-#caption-input input[type=text]:focus {  
+#caption-container input[type=text]:focus {  
     outline: none;
 }
 
-#caption-input.active {
+#caption-container.active {
     height: 30%;
 }
 
@@ -264,4 +317,56 @@ canvas {
     border-radius: 50%; 
     background: white;
     cursor: pointer;
+}
+
+
+/* #colo */
+.dialog {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, 50vw);
+    padding: 2vh;
+    background-color: #ffffff7d;
+    border-radius: 2.5vh;
+
+    font-size: 5em;
+}
+
+.dialog input{
+    font-family: 'Source Code Pro', monospace;
+    font-size: .7em;
+    text-align: center;
+    border: none;
+    border-radius: 2.5vh;
+    padding: .1em;
+}
+
+.dialog input.username {
+    box-shadow: 8px 8px #7ce7ff;
+    background-color: #b6fbff;
+}
+
+.dialog input.password {
+    box-shadow: 8px 8px #6affd6;
+    background-color: #c0ffe2;
+}
+
+.dialog p {
+    margin: 0;
+    font-size: .7em;
+    margin-bottom: 2vh;
+    width: 100%;
+    font-weight: bolder;
+    text-align: center;
+    color: #000000b0;
+}
+
+.dialog button {
+    font-family: 'Source Code Pro', monospace;
+    font-size: .5em;
+    border-radius: 2.5vh;
+    border: none;
+    padding: .5vh 1vh .5vh 1vh;
+    background-color: white;
+    box-shadow: 4px 4px #333333;
 }

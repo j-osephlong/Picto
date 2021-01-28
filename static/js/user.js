@@ -1,100 +1,111 @@
-function setupServerListeners()
-{
-    socket.on('reload-device', (res) => {forceReload()})
-    socket.on('server-message', (res) => {alert(res['message'])})
+let tokenInRoute = false
+
+function auth(username, password) {
+    $.ajax({
+        url: '/user/auth', // point to server-side URL
+        cache: false,
+        contentType: false,
+        processData: false,
+        data: JSON.stringify({'userName':username,'password':password}),
+        type: 'POST',
+        error: ()=>{
+            if ('error' in res)
+                alert(res['error'])
+        }
+    }).done(function (res) {
+        console.log(res)
+        appV.username = username
+        setToken(res['token'], username)
+    }) 
 }
 
-function verifyID (res)
-{
-    if (appV.$cookies.isKey("userID") == false)
-    {
-        appV.$cookies.set('userID', res['newID'], 60*60*24*365)
-
-        appV.id = appV.$cookies.get('userID')
-        console.log('[user.js] New ID assigned, ' + appV.id)
-    }
-    else if (res['isValid'])
-    {
-        appV.id = appV.$cookies.get('userID')
-        console.log('[user.js] userID valid')
-        //do stuff
-    }
-    else 
-    {
-        console.log('[user.js] userID invalid')
-        alert("ID Invalid, reloading.")
-        appV.$cookies.remove('userID')
-        forceReload()
-    }
-} 
-
-function vIDAjax ()
-{
-    let reqJSON = {}
-    if (appV.$cookies.isKey('userID') == false)
-        reqJSON['newName'] = prompt("New User", "What do you wanna be known as?")
-    else 
-        reqJSON['userID'] = appV.$cookies.get('userID')
-
+function register(username, password) {
     $.ajax({
-        url: '/check_id',
-        contentType: "application/json",
-        // dataType: "json", this prevents done from firing
-        data: JSON.stringify(reqJSON),
+        url: '/user/register', // point to server-side URL
+        cache: false,
+        contentType: false,
+        processData: false,
+        data: JSON.stringify({'userName':username,'password':password}),
         type: 'POST',
-        success: function(res) {
-            verifyID(res)
+        error: ()=>{
+            if ('error' in res)
+                alert(res['error'])
         }
-    })
-} 
-
-function forceReload()
-{
-    $.ajax({
-        url: window.location.href,
-        headers: {
-            "Pragma": "no-cache",
-            "Expires": -1,
-            "Cache-Control": "no-cache"
-        }
-    }).done(function () {
-        window.location.reload(true);
-    });
+    }).done(function (res) {
+        console.log(res)
+        appV.username = username
+        setToken(res['token'], username)
+    }) 
 }
 
-function getUserData()
-{
-    let reqJSON = {'userID' : appV.id}
+function setToken(newToken, username = null)
+{   
+    tokenInRoute = false;
 
-    $.ajax({
-        url: '/user_data',
-        contentType: "application/json",
-        // dataType: "json", this prevents done from firing
-        data: JSON.stringify(reqJSON),
-        type: 'POST',
-        success: function(res) {
-            user = JSON.parse(res)
-            console.log(res)
-        }
-    })
+    appV.token = newToken
+    $cookies.set('tempToken', newToken)
+    if (username != null)
+    {
+        $cookies.set('username', username)
+    }
 }
 
-function updateUserData(name = null, color = null)
+function getToken()
 {
-    let reqJSON = {'userID' : appV.id}
-    if (name != null)
-        reqJSON['name'] = name
-    if (color != null)
-        reqJSON['color'] = color
+    tokenInRoute = true;
+    if (appV.token != null)
+        return appV.token 
+   
+    if (!$cookies.isKey('tempToken'))
+        return null
+    appV.token = $cookies.get('tempToken')
 
-    $.ajax({
-        url: '/update_user',
-        contentType: "application/json",
-        // dataType: "json", this prevents done from firing
-        data: JSON.stringify(reqJSON),
-        type: 'POST',
-        success: function(res) {
-            console.log(res)
-        }
-    })
+    return appV.token
+}
+
+function badToken() {
+    console.log('removed bad user data')
+    $cookies.remove('username')
+    $cookies.remove('tempToken')
+    appV.token = null
+    appV.username = null
+    // alert('Token in route?:'+tokenInRoute)
+
+    if (document.location.pathname != "/")
+        document.location = "/#badtoken"
+}
+
+function testToken() {
+    function test()
+    {
+        var valid = null
+
+        $.ajax({
+            url: '/user/me', // point to server-side URL
+            cache: false,
+            contentType: false,
+            processData: false,
+            data: JSON.stringify({'userName':appV.username,'token':getToken()}),
+            type: 'POST',
+            async: false,
+            success: function (res) {
+                console.log(res)
+                if ('error' in res)
+                {
+                    console.log('server rejects token')  
+                    valid = false;
+                }
+                else
+                {
+                    console.log('server accepts token')
+                    setToken(res['newToken'])
+                    valid = true
+                }
+            }
+        }) 
+        return valid;
+    }
+
+    if (!test())
+        badToken()
 }
