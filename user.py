@@ -1,83 +1,94 @@
-import sys
-import json
-import os, hashlib, datetime, base64
-import dataBase as db
 from flask import Flask
 from flask import request, render_template, redirect, Response, jsonify, session, make_response, Blueprint
+import jwt, json, userhash, hashlib, os, datetime, codecs
+import dbinterface as db
 
+#Define Flask blueprint, allows for modular server
 user = Blueprint('user', __name__, template_folder='templates')
-socketio = None
 
-@user.route('/check_id', methods = ['POST', 'GET'])
-def checkID(id = None):
-    if id == None:
-        req = json.loads(request.data)
-    else:
-        req = id
+#This server uses JWT tokens to verify users identity.
+#   To make tokens secure, we use a 'secret'. This line creates that secret.  
+tokenSecret = str(hashlib.sha256(os.urandom(60)).hexdigest().encode('ascii'))
 
-    if 'userID' not in req:
-        while True:
-            id = hashlib.sha256(os.urandom(60)).hexdigest().encode('ascii')
-            if len(db.query('users', 'id', 'WHERE id = \"{id}\"'.format(id = id))) == 0:
-                break
-        db.insert('users', '\"{id}\", \"{name}\", \'user\', 0, NULL, \"#ffffff\"'.format(id = id, name = req['newName'])) 
-        return {'newID' : str(id)} 
+#All tokens are stored in this dictionary (username -> token)
+tokens = {}
 
-    elif len(db.query('users', 'id', 'WHERE id = \"{id}\"'.format(id = req['userID']))) == 1:
-        print("user.py ==> User " + req['userID'] + " is valid.")
-        return {'isValid' : True}
+#Socket ID's are stored in this dict, mapping to a 2-tuple of (username, chatID)
+#   Used to handle socket disconnections
+userSockets = {}
 
-    # print("user.py ==> User " + req['userID'] + " is invalid.")
-    return {'isValid' : False}
+@user.route('/user/register', methods=['POST'])
+def createUser():
+    #get JSON of request
+    data = json.loads(request.data)
 
-@user.route('/control', methods = ['POST', 'GET'])
-def controlCommand():
-    req = json.loads(request.data)
-
-    if req['pass'] == '3838abcdE!4949':
-        if req['command'] == 'reload-all':
-            socketio.emit('reload-device', {})
-        elif req['command'] == 'message':
-            socketio.emit('server-message', {'message' : req['message']})
-    else:
-        return 'Invalid Request'
-
-@user.route('/user_data', methods = ['POST', 'GET'])
-def getUserData():
-    req = json.loads(request.data)
+    #check if username free
+    if len(db.query('users', 'username', 
+        'WHERE username = \'{uName}\''.format(uName = data['userName']))) > 0:
+        return {'error' : 'name_claimed'}, 400
     
-    if checkID(req)['isValid'] == False:
-        return 'invalid_id'
+    #if username free, hash it and store the hash + salt
+    salt, hash = userhash.hashpass(data['password'])
+    db.insert('users', ("\'"+data['userName']+"\'", "\'"+salt+"\'", "\'"+hash+"\'"))
     
-    user = json.loads(
-        db.tableToJSON(
-            'users',
-            db.query('users', args='WHERE id = \"{id}\"'.format(id = req['userID'])),
-            ('account_id')
-        )
-    )
-    user = user[0]
+    #send back a new token
+    userToken = createToken(data['userName'])
+    tokens[data['userName']] = userToken
+    return {'token' : userToken}
+    
+#Method creates a new token with a username payload, a half-hour expiry,
+#   and the secret  
+def createToken(username):
+    return jwt.encode({'userName': username, 'exp' : datetime.datetime.utcnow()+datetime.timedelta(minutes = 30)}
+        , tokenSecret, algorithm='HS256').hex()
 
-    return json.dumps(user)
+#Method used for login. Returns a token on success
+@user.route('/user/auth', methods=['POST'])
+def userAuth():
+    data = json.loads(request.data)
 
-@user.route('/update_user', methods = ['POST', 'GET'])
-def setUserData():
-    req = json.loads(request.data)
+    #check that user exists in database
+    if len(db.query('users', 'username', 
+        'WHERE username = \'{uName}\''.format(uName = data['userName'])))  != 1:
+        return {'error' : "invalid-username"}, 401
+    
+    #if user exists, check that the password, when hashed, matches the stored
+    #   user password hash. If so, send token
+    if userhash.checkpass(data['userName'], data['password']):
+        userToken = createToken(data['userName'])
+        tokens[data['userName']] = userToken
+        return {'token' : userToken}
+    else: 
+        return {'error' : 'invalid-pass'}, 401
 
-    if checkID(req)['isValid'] == False:
-        return 'invalid_id'
+#Method used by any request handler that needs to verify a token.
+    #If valid, method destroys old token and returns a new one.
+    #If invalid, returns false.
+def tokenAuth(username, token):
+    user = None
+    try:
+        user = jwt.decode(codecs.decode(token, "hex"), tokenSecret, algorithms=['HS256'])['userName']
+    except Exception as E:
+        print(str(E))
+        return False
 
-    queryStr = None
+    if user != username:
+        return False
 
-    if 'color' in req and 'name' in req:
-        queryStr = 'SET color = \"{color}\", name = \"{name}\" '.format(color = req['color'], name = req['name'])
-    elif 'color' in req:
-        queryStr = 'SET color = \"{color}\" '.format(color = req['color'])
-    elif 'name' in req:
-        queryStr = 'SET name = \"{name}\" '.format(name = req['name'])
+    if user in tokens:
+        if tokens[user] != token:
+            return False
+    
+    newToken = createToken(username)
+    tokens[user] = newToken
+    return newToken
 
-    queryStr += 'WHERE id = \"{id}\"'.format(id = req['userID'])
-
-    db.update('users', queryStr)
-
-    return 'Changes saved'
+#Method used by client to verify that token still valid. 
+    #Returns new token if valid.
+@user.route('/user/me', methods=['POST'])
+def getSelf():
+    data = json.loads(request.data)
+    newToken = tokenAuth(data['userName'], data['token'])
+    if newToken == False:
+        return {'error': 'invalid-token'}, 401
+    return {'Yay!':True, 'newToken':newToken}

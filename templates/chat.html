@@ -1,0 +1,297 @@
+<html>
+    <head>
+        <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.js"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/vue-cookies@1.7.0/vue-cookies.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/1.7.3/socket.io.min.js"></script>
+
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename = 'css/style.css') }}"> 
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename = 'css/landscape.css') }}"> 
+        <script src="{{ url_for('static', filename = 'js/draw.js') }}"></script>
+        <script src="{{ url_for('static', filename = 'js/user.js') }}"></script>
+        <script src="{{ url_for('static', filename = 'js/chat.js') }}"></script>
+
+        <title>PictoALPH</title>
+
+        <!-- Basic declarations and Meta descriptions -->
+        <meta charset="utf-8">
+        <meta name="viewport" content="user-scalable=0"> 
+        <!-- <meta name="viewport"    content="width=device-width, initial-scale=1, shrink-to-fit=no"> -->
+        <meta name="description" content="Chat.">
+
+
+    </head>
+
+    <script>
+        let appV = null
+
+        /*
+            Define message container componen in vue.js
+            */
+        Vue.component('message-li', {
+            delimiters : ['[[', ']]'],
+            props: ['message'],
+            template: `
+                <div v-bind:class="{ 'chat-notice': (typeof message.isNotice != 'undefined'), 'message': (typeof message.isNotice == 'undefined') }">
+                    <div v-if="typeof message.isNotice == 'undefined'">
+                        <div class='name'>[[ message.name ]]</div>
+                        <div class="img-container">
+                            <img v-bind:src=" message.img ">
+                        </div>
+                        <div class="caption" v-if="message.caption != 'None'">[[ message.caption ]]</div> 
+                    </div>
+                    <div v-else>
+                        <span>[[ message.name ]]</span> has joined the chat!
+                    </div>
+                </div>`
+        })
+
+        /* 
+            Define vue.js directive for swipe gesture (using hammer.js for detection)
+            */
+        Vue.directive("swipe", {
+            bind: function(el, binding) {
+                if (typeof binding.value === "function") {
+                    const mc = new Hammer(el);
+                    mc.get("swipe").set({ direction: Hammer.DIRECTION_VERTICAL });
+                    mc.on("swipe", binding.value);
+                }
+            }
+        });
+
+        /*
+            Function to handle animations for swipe gesture
+            */
+        function animateOverlay(finalTop, dist = 0) 
+        {
+            finalTop == 0.9 ? $('#messages-container').css('height', '90%') : {}
+
+            $('#bottom-overlay').animate(
+                {top : ($(document.body).height()*finalTop + dist)}, 
+                {duration: 150, complete: ()=>{
+                    $('#bottom-overlay').animate(
+                        {top : finalTop*100 + '%'},
+                        {duration: 50, complete: ()=>{
+
+                            finalTop == 0.5 ? $('#messages-container').css('height', '50%') : {}
+                            finalTop == 0.5 ? $('#toolbar').css('bottom', '5%') : $('#toolbar').css('bottom', '-5%')
+                            
+                            $('#tab-line-c').animate(
+                                {padding : finalTop == 0.5 ? '5%' : 
+                                ($(document.body).height()-$('#bottom-overlay').position().top)/2},
+                                    250
+                                )
+                        }})
+                }
+            })
+
+            finalTop == 0.5 ?$('#messages-container').animate({scrollTop :  $('#messages-container').scrollTop()+ $('#bottom-overlay').height()}, 250):{}
+        }
+
+        /*  
+            Handler for pen button, animates in/out pen overlay for changing pen settings
+            */
+        function togglePenSettings() {
+            if (!appV.penSettings)
+                $('#canvas-container').animate({opacity : 0}, 
+                    {duration: 100, complete : ()=>{
+                        $('#canvas-container').css('display', 'none')
+
+                        $('#bottom-overlay').css('background-color', '#2d2d2d')
+                        $('#pen-settings').css('display', 'block')
+                        setTimeout(()=>{
+                            $('#pen-settings').css('opacity', '1')
+                        }, 100)
+
+                    }
+                })
+            else 
+            {
+                $('#pen-settings').css('opacity', '0')
+                setTimeout(()=>{
+                    $('#pen-settings').css('display', 'none')
+                    $('#bottom-overlay').css('background-color', 'white')
+                    $('#canvas-container').css('display', 'block')
+                    $('#canvas-container').animate({opacity : 1}, 100)
+                }, 100)
+            }
+            
+            appV.penSettings= !appV.penSettings 
+        }
+
+        /*  
+            Handler for send animation
+            */
+        function sendAnimation ()
+        {
+            if (blank)
+                return
+            $('#send').css('color', 'black');
+            $('#send').animate({height: '110%'}, {duration : 250, complete : ()=>{
+                    setTimeout(()=>{
+                        clearCanvas()
+
+                        $('#send').animate({height: '20%'}, {duration : 250, complete : ()=>{
+                                $('#send').html('Sent!')
+                            }});
+                        $('#send').css('color', 'white');
+                        setTimeout(()=>{
+                            $('#send').html('Send')
+                        }, 1000)
+                    }, 1000)
+                }
+            })
+        }
+        
+        /*
+            This handler effectively acts as the JS entry point in the document like "main()"
+            */
+        document.addEventListener('DOMContentLoaded', e=>{
+            //Define instance of vue.js framework to build off of
+            appV = new Vue({
+                el: '#app',
+                delimiters : ['[[', ']]'],
+                data: { //reactive / important data defined here
+                    chatID : null,
+                    username : null,
+                    token : null, 
+                    connected : true,
+                    messages: chatMessages,
+                    bottom_overlay_top: 0.5,
+                    penSettings: false,
+                    eraser: false,
+                    caption: false,
+                    scrolling: false
+                },
+                mounted() {
+                    /*
+                        This mounted function is called once the vue rendering has completed,
+                        and sets up the reactive scrolling behaviour
+                        */
+                    $('#messages-container').scroll((e) => {this.scrolling = true})
+
+                    setInterval(() => {
+                        if (this.scrolling)
+                        {
+                            console.log('scrolling')
+                            var newMsgs
+                            if ($("#messages-container").scrollTop() < 1000)
+                            {
+                                console.log('[CASE A]')
+
+                                var prevST, prevSH, newSH, prevOffset
+                                prevST = $("#messages-container").scrollTop()
+                                prevSH = $("#messages-container").prop('scrollHeight')
+                                prevOffset = appV.messages.length 
+
+                                fetchMessages(appV.messages.length, 10) 
+
+                                if (appV.messages.length > prevOffset){
+                                    newSH = $("#messages-container").prop('scrollHeight')
+                                    $("#messages-container").scrollTop((newSH-prevSH)+ prevST)
+                                    console.log('PSH:' + prevSH + " NSH:" + newSH + " PST:" + prevST)
+                                    console.log('projected:' + ((newSH-prevSH)+ prevST))
+                                }
+                            }   
+                            // if ($("#messages-container").scrollTop() < 100 && newMsgs)
+                            //     $("#messages-container").scrollTop(200)
+                        }
+                        this.scrolling = false;
+                    }, 200)
+                },
+                methods: {
+                    /*  
+                        Preamble to animateOverlay function,
+                        determines which direction it should be animated in.
+                        */
+                    overlaySwipe(event) {
+                        if (!event.isFinal) return
+
+                        if (event.direction == 16)
+                            bottom_overlay_top = 0.9
+                        else
+                            bottom_overlay_top = 0.5
+
+                        var dist = (event.direction == 16? 1 : -1)*Math.abs(event.velocityY) *5
+                        animateOverlay(bottom_overlay_top, dist)
+
+                    },
+                    toggleCaption(event) {
+                        this.caption= !this.caption
+                    }
+                }
+            })
+
+            //get token and username from either cookies or app memory
+            appV.token = getToken()
+            if (appV.token != null) 
+            {
+                appV.username = $cookies.get('username')
+                console.log('hh')
+                testToken() //test token if found in cache to make sure it's still valid
+            }
+            joinChat() //join chat room
+
+            animateOverlay(0.9)            
+        });
+
+    </script>
+
+    <body>
+        
+        <div id="app">
+            <div id="messages-container">
+                <message-li 
+                    v-for="message in messages"
+                    v-bind:message="message"
+                    v-bind:key="message.id">
+                </message-li>
+                <div class="chat-notice warning" v-if="connected == false">
+                    Lost connection to server.<br>
+                    <span style="font-size: .4em;">
+                        It is possible that the server has gone down temporarily, and will require you to log back in when it starts back up. Sorry!
+                    </span>
+                </div>
+            </div>
+            <div id="toolbar" > 
+                <div class="toolbar-button" v-bind:class="{checked : penSettings}" onclick="togglePenSettings()">Pen</div>
+                <div class="toolbar-button" v-bind:class="{checked : eraser}" onclick="toggleEraser()">Erase</div>
+                <div class="toolbar-button" v-bind:class="{checked : caption}" onclick="appV.caption= !appV.caption">Caption</div>
+                <div class="toolbar-button" onclick="copyMessage()">Copy</div>
+                <div class="toolbar-button" onclick="clearCanvas()">Clear</div>
+            </div>
+            <div id="bottom-overlay" >
+                <div id="tab-line-c" v-swipe="overlaySwipe" style="position: absolute;width: 100%;height: 3%;padding: 5%;box-sizing: border-box;">
+                    <div class="tab-line"></div>
+                </div>
+
+                <div style="-webkit-touch-callout: none;
+                -webkit-user-select: none;
+                -khtml-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                user-select: none;width: 100%; height: 80%;" id="canvas-container">
+                    <canvas width="100%" height="100%" style="height: 100%; width: 100%;"></canvas>
+                </div>
+
+                <div id="pen-settings">
+                    <span style="color: white;text-align: center;">Pen Size<br></span>
+                    <input type="range" min="5" max="60" value="15" class="slider" id="penSize">
+                    <span style="color: white;text-align: center;" id='penColorText'><br>Pen Color<br></span>
+                    <span style=" font-size: 2vh;color: rgb(255, 131, 131);">Red<br></span>
+                    <input type="range" min="0" max="255" value="0" class="slider" id="penRed">
+                    <span style="font-size: 2vh;color: rgb(160, 255, 131);">Green<br></span>
+                    <input type="range" min="0" max="255" value="0" class="slider" id="penGreen">
+                    <span style="font-size: 2vh;color: rgb(131, 181, 255);">Blue<br></span>
+                    <input type="range" min="0" max="255" value="0" class="slider" id="penBlue">
+                </div>
+
+                <div class="bottom-button" id="send" onclick="send();sendAnimation()">Send</div>
+                <div id="caption-container" v-bind:class="{active : caption}">
+                    <input id="caption-input" placeholder="Caption" type="text">
+                </div>
+            </div>
+    </body>
+
+</html>
